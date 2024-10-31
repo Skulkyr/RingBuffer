@@ -3,7 +3,13 @@ package org.pogonin;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class RingBufferImpl<T> implements RingBuffer<T> {
+/**
+ * Implementation of the {@link RingBuffer} interface based on a blocking ring buffer.
+ * Uses {@link ReentrantLock} and conditions to control buffer access.
+ *
+ * @param <T> The type of elements stored in the buffer.
+ */
+public class BlockingRingBuffer<T> implements RingBuffer<T> {
     private final T[] buffer;
     private int head;
     private int tail;
@@ -13,8 +19,14 @@ public class RingBufferImpl<T> implements RingBuffer<T> {
     private final Condition notFull;
     private final Condition notEmpty;
 
+    /**
+     * Creates a new instance of {@code BlockingRingBuffer} with the given capacity.
+     *
+     * @param capacity Buffer capacity. Must be a positive number.
+     * @throws IllegalArgumentException If {@code capacity} is less than or equal to zero.
+     */
     @SuppressWarnings("unchecked")
-    public RingBufferImpl(int capacity) {
+    public BlockingRingBuffer(int capacity) {
         if (capacity <= 0)
             throw new IllegalArgumentException("Buffer size must be positive");
         buffer = (T[]) new Object[capacity];
@@ -26,7 +38,15 @@ public class RingBufferImpl<T> implements RingBuffer<T> {
         notEmpty = lock.newCondition();
     }
 
+    /**
+     * Adds an element to the buffer. If the buffer is full, the method blocks until
+     * until there is room to add an element.
+     *
+     * @param item The item to add to the buffer.
+     * @throws RuntimeException If the thread is interrupted while waiting.
+     */
     public void put(T item) {
+        if (item == null) throw new NullPointerException("Null items are not allowed");
         lock.lock();
         try {
             while (count == buffer.length) {
@@ -37,12 +57,19 @@ public class RingBufferImpl<T> implements RingBuffer<T> {
             count++;
             notEmpty.signal();
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Thread was interrupted while waiting to put item.", e);
         } finally {
             lock.unlock();
         }
     }
 
+    /**
+     * Retrieves and removes an element from the buffer. If the buffer is empty, the method blocks until
+     * until the element appears in the buffer.
+     *
+     * @return The element retrieved from the buffer.
+     * @throws RuntimeException If the thread is interrupted while waiting.
+     */
     public T take() {
         lock.lock();
         try {
@@ -56,7 +83,7 @@ public class RingBufferImpl<T> implements RingBuffer<T> {
             notFull.signal();
             return item;
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Thread was interrupted while waiting to take item.", e);
         } finally {
             lock.unlock();
         }
