@@ -1,7 +1,9 @@
 package org.pogonin;
 
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Implementation of the {@link RingBuffer} interface based on a blocking ring buffer.
@@ -15,7 +17,7 @@ public class BlockingRingBuffer<T> implements RingBuffer<T> {
     private int tail;
     private int count;
 
-    private final ReentrantLock lock;
+    private final ReadWriteLock lock;
     private final Condition notFull;
     private final Condition notEmpty;
 
@@ -33,9 +35,9 @@ public class BlockingRingBuffer<T> implements RingBuffer<T> {
         head = 0;
         tail = 0;
         count = 0;
-        lock = new ReentrantLock(true);
-        notFull = lock.newCondition();
-        notEmpty = lock.newCondition();
+        lock = new ReentrantReadWriteLock(true);
+        notFull = lock.writeLock().newCondition();
+        notEmpty = lock.writeLock().newCondition();
     }
 
     /**
@@ -47,7 +49,7 @@ public class BlockingRingBuffer<T> implements RingBuffer<T> {
      */
     public void put(T item) {
         if (item == null) throw new NullPointerException("Null items are not allowed");
-        lock.lock();
+        lock.writeLock().lock();
         try {
             while (count == buffer.length) {
                 notFull.await();
@@ -59,7 +61,7 @@ public class BlockingRingBuffer<T> implements RingBuffer<T> {
         } catch (InterruptedException e) {
             throw new RuntimeException("Thread was interrupted while waiting to put item.", e);
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -71,7 +73,7 @@ public class BlockingRingBuffer<T> implements RingBuffer<T> {
      * @throws RuntimeException If the thread is interrupted while waiting.
      */
     public T take() {
-        lock.lock();
+        lock.writeLock().lock();
         try {
             while (count == 0) {
                 notEmpty.await();
@@ -85,18 +87,13 @@ public class BlockingRingBuffer<T> implements RingBuffer<T> {
         } catch (InterruptedException e) {
             throw new RuntimeException("Thread was interrupted while waiting to take item.", e);
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
 
     public int size() {
-        lock.lock();
-        try {
             return count;
-        } finally {
-            lock.unlock();
-        }
     }
 
     public boolean isEmpty() {

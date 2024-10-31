@@ -2,8 +2,8 @@ package org.pogonin;
 
 
 public class App {
-    public static void main(String[] args) {
-        final RingBuffer<Integer> ringBuffer = new CASRingBuffer<>(8);
+    public static void main(String[] args) throws Exception {
+        final RingBuffer<Integer> ringBuffer = new BlockingRingBuffer<>(1);
 
         Runnable producer = () -> {
             for (int i = 1; i <= 100; i++) {
@@ -11,6 +11,7 @@ public class App {
                 System.out.println("The producer added: " + i);
             }
         };
+
 
         Runnable consumer = () -> {
             for (int i = 1; i <= 100; i++) {
@@ -23,6 +24,7 @@ public class App {
         Thread consumerThread1 = new Thread(consumer);
 
         producerThread1.start();
+        Thread.sleep(100);
         consumerThread1.start();
 
         try {

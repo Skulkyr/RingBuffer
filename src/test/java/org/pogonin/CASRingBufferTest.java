@@ -208,7 +208,7 @@ public class CASRingBufferTest {
     public void testStress() throws InterruptedException {
         int producerThreads = 10;
         int consumerThreads = 10;
-        int itemsPerProducer = 1000;
+        int itemsPerProducer = 10000;
         @SuppressWarnings("all")
         ExecutorService executor = Executors.newFixedThreadPool(producerThreads + consumerThreads);
         CountDownLatch latch = new CountDownLatch(producerThreads + consumerThreads);
