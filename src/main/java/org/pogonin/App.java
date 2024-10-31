@@ -23,9 +23,9 @@ public class App {
         Thread producerThread1 = new Thread(producer);
         Thread consumerThread1 = new Thread(consumer);
 
-        producerThread1.start();
-        Thread.sleep(100);
         consumerThread1.start();
+        Thread.sleep(100);
+        producerThread1.start();
 
         try {
             producerThread1.join();

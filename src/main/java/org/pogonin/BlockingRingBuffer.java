@@ -1,99 +1,62 @@
 package org.pogonin;
 
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Implementation of the {@link RingBuffer} interface based on a blocking ring buffer.
- * Uses {@link ReentrantLock} and conditions to control buffer access.
- *
- * @param <T> The type of elements stored in the buffer.
- */
+
 public class BlockingRingBuffer<T> implements RingBuffer<T> {
     private final T[] buffer;
-    private int head;
-    private int tail;
-    private int count;
+    private final AtomicInteger head;
+    private final AtomicInteger tail;
+    private final AtomicInteger count;
 
-    private final ReadWriteLock lock;
-    private final Condition notFull;
-    private final Condition notEmpty;
+    private final Semaphore putSemaphore;
+    private final Semaphore takeSemaphore;
 
-    /**
-     * Creates a new instance of {@code BlockingRingBuffer} with the given capacity.
-     *
-     * @param capacity Buffer capacity. Must be a positive number.
-     * @throws IllegalArgumentException If {@code capacity} is less than or equal to zero.
-     */
+
+
     @SuppressWarnings("unchecked")
     public BlockingRingBuffer(int capacity) {
         if (capacity <= 0)
             throw new IllegalArgumentException("Buffer size must be positive");
         buffer = (T[]) new Object[capacity];
-        head = 0;
-        tail = 0;
-        count = 0;
-        lock = new ReentrantReadWriteLock(true);
-        notFull = lock.writeLock().newCondition();
-        notEmpty = lock.writeLock().newCondition();
+        head = new AtomicInteger(0);
+        tail = new AtomicInteger(0);
+        count = new AtomicInteger(0);
+        putSemaphore = new Semaphore(capacity);
+        takeSemaphore = new Semaphore(0);
     }
 
-    /**
-     * Adds an element to the buffer. If the buffer is full, the method blocks until
-     * until there is room to add an element.
-     *
-     * @param item The item to add to the buffer.
-     * @throws RuntimeException If the thread is interrupted while waiting.
-     */
+
     public void put(T item) {
         if (item == null) throw new NullPointerException("Null items are not allowed");
-        lock.writeLock().lock();
         try {
-            while (count == buffer.length) {
-                notFull.await();
-            }
-            buffer[tail] = item;
-            tail = (tail + 1) % buffer.length;
-            count++;
-            notEmpty.signal();
+            putSemaphore.acquire();
+            int currentTail = tail.getAndUpdate(t -> (t+1) % buffer.length);
+            buffer[currentTail] = item;
+            count.getAndIncrement();
+            takeSemaphore.release();
         } catch (InterruptedException e) {
             throw new RuntimeException("Thread was interrupted while waiting to put item.", e);
-        } finally {
-            lock.writeLock().unlock();
         }
     }
 
-    /**
-     * Retrieves and removes an element from the buffer. If the buffer is empty, the method blocks until
-     * until the element appears in the buffer.
-     *
-     * @return The element retrieved from the buffer.
-     * @throws RuntimeException If the thread is interrupted while waiting.
-     */
+
     public T take() {
-        lock.writeLock().lock();
         try {
-            while (count == 0) {
-                notEmpty.await();
-            }
-            T item = buffer[head];
-            buffer[head] = null;
-            head = (head + 1) % buffer.length;
-            count--;
-            notFull.signal();
+            takeSemaphore.acquire();
+            int currentHead = head.getAndUpdate(t -> (t+1) % buffer.length);
+            T item = buffer[currentHead];
+            count.getAndDecrement();
+            putSemaphore.release();
             return item;
         } catch (InterruptedException e) {
             throw new RuntimeException("Thread was interrupted while waiting to take item.", e);
-        } finally {
-            lock.writeLock().unlock();
         }
     }
 
-
     public int size() {
-            return count;
+            return count.get();
     }
 
     public boolean isEmpty() {
